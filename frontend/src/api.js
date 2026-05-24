@@ -61,6 +61,20 @@ export const api = {
     });
   },
 
+  adminLogin: (username, password) => {
+    const form = new URLSearchParams();
+    form.append("username", username);
+    form.append("password", password);
+
+    return request("/auth/admin/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: form,
+    });
+  },
+
   me: () => request("/auth/me"),
   users: () => request("/auth/users"),
 

@@ -1,7 +1,12 @@
 from sqlmodel import Session, select
 
+from app.auth import hash_password
 from app.models import Deck, Flashcard, User
 
+
+DEFAULT_ADMIN_USERNAME = "admin"
+DEFAULT_ADMIN_PASSWORD = "admin"
+DEFAULT_ADMIN_EMAIL = "admin@example.com"
 
 STARTER_CARDS = [
     {
@@ -25,6 +30,27 @@ STARTER_CARDS = [
         "answer": "JWT is a signed token used to authenticate users after login.",
     },
 ]
+
+
+def ensure_default_admin(session: Session):
+    admin = session.exec(
+        select(User).where(User.username == DEFAULT_ADMIN_USERNAME)
+    ).first()
+
+    if admin:
+        admin.email = admin.email or DEFAULT_ADMIN_EMAIL
+        admin.hashed_password = hash_password(DEFAULT_ADMIN_PASSWORD)
+        admin.role = "admin"
+    else:
+        admin = User(
+            username=DEFAULT_ADMIN_USERNAME,
+            email=DEFAULT_ADMIN_EMAIL,
+            hashed_password=hash_password(DEFAULT_ADMIN_PASSWORD),
+            role="admin",
+        )
+
+    session.add(admin)
+    session.commit()
 
 
 def create_starter_cards_for_user(session: Session, user: User):

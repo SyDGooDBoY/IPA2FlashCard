@@ -33,13 +33,11 @@ def register(user_data: UserCreate, session: Session = Depends(get_session)):
     if existing_email:
         raise HTTPException(status_code=400, detail="Email already exists")
 
-    first_user = session.exec(select(User)).first()
-
     new_user = User(
         username=user_data.username,
         email=user_data.email,
         hashed_password=hash_password(user_data.password),
-        role="admin" if first_user is None else "user",
+        role="user",
     )
 
     session.add(new_user)
@@ -51,10 +49,10 @@ def register(user_data: UserCreate, session: Session = Depends(get_session)):
     return new_user
 
 
-@router.post("/login", response_model=Token)
-def login(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    session: Session = Depends(get_session),
+def authenticate_with_role(
+    form_data: OAuth2PasswordRequestForm,
+    session: Session,
+    required_role: str,
 ):
     user = session.exec(
         select(User).where(User.username == form_data.username)
@@ -63,9 +61,28 @@ def login(
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Incorrect username or password")
 
+    if user.role != required_role:
+        raise HTTPException(status_code=403, detail=f"{required_role.title()} login required")
+
     token = create_access_token(user.username)
 
     return {"access_token": token, "token_type": "bearer"}
+
+
+@router.post("/login", response_model=Token)
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    session: Session = Depends(get_session),
+):
+    return authenticate_with_role(form_data, session, "user")
+
+
+@router.post("/admin/login", response_model=Token)
+def admin_login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    session: Session = Depends(get_session),
+):
+    return authenticate_with_role(form_data, session, "admin")
 
 
 @router.get("/me", response_model=UserRead)

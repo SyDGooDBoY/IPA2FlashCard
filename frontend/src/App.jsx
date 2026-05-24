@@ -7,6 +7,7 @@ function App() {
   const [user, setUser] = useState(null);
 
   const [authMode, setAuthMode] = useState("login");
+  const [authRole, setAuthRole] = useState("user");
   const [authForm, setAuthForm] = useState({
     username: "",
     email: "",
@@ -84,11 +85,15 @@ function App() {
       if (authMode === "register") {
         await api.register(authForm);
         setAuthMode("login");
+        setAuthRole("user");
         setMessage("Registration successful. Please login.");
         return;
       }
 
-      const data = await api.login(authForm.username, authForm.password);
+      const data =
+        authRole === "admin"
+          ? await api.adminLogin(authForm.username, authForm.password)
+          : await api.login(authForm.username, authForm.password);
       localStorage.setItem("token", data.access_token);
       setToken(data.access_token);
       setMessage("");
@@ -282,7 +287,33 @@ function App() {
           </h1>
 
           <form onSubmit={handleAuthSubmit}>
-            <h2>{authMode === "login" ? "Login" : "Register"}</h2>
+            <h2>
+              {authMode === "register"
+                ? "Register"
+                : authRole === "admin"
+                  ? "Admin Login"
+                  : "User Login"}
+            </h2>
+
+            {authMode === "login" && (
+              <div className="auth-switch">
+                <button
+                  type="button"
+                  className={authRole === "user" ? "active" : ""}
+                  onClick={() => setAuthRole("user")}
+                >
+                  User Login
+                </button>
+
+                <button
+                  type="button"
+                  className={authRole === "admin" ? "active" : ""}
+                  onClick={() => setAuthRole("admin")}
+                >
+                  Admin Login
+                </button>
+              </div>
+            )}
 
             <input
               placeholder="Username"
@@ -322,12 +353,16 @@ function App() {
             <button
               type="button"
               className="ghost-button"
-              onClick={() =>
-                setAuthMode(authMode === "login" ? "register" : "login")
-              }
+              onClick={() => {
+                const nextMode = authMode === "login" ? "register" : "login";
+                setAuthMode(nextMode);
+                if (nextMode === "register") {
+                  setAuthRole("user");
+                }
+              }}
             >
               {authMode === "login"
-                ? "Need an account? Register"
+                ? "Need a user account? Register"
                 : "Already have an account? Login"}
             </button>
           </form>

@@ -1,8 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlmodel import Session
 
-from app.database import create_db_and_tables
+from app.database import create_db_and_tables, engine
 from app.routers import auth_routes, decks, flashcards, history
+from app.seed import ensure_default_admin
 
 app = FastAPI(title="Flashcard Learning App API")
 
@@ -20,6 +22,8 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     create_db_and_tables()
+    with Session(engine) as session:
+        ensure_default_admin(session)
 
 
 @app.get("/")
