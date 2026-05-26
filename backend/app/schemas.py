@@ -24,6 +24,15 @@ class UserRead(SQLModel):
     created_at: datetime
 
 
+class UserUpdate(SQLModel):
+    email: Optional[str] = None
+
+
+class PasswordChange(SQLModel):
+    current_password: str
+    new_password: str
+
+
 class DeckCreate(SQLModel):
     title: str
     description: Optional[str] = None
@@ -74,3 +83,21 @@ class HistoryRead(SQLModel):
     flashcard_id: int
     is_correct: bool
     viewed_at: datetime
+
+
+class HistoryDetailRead(HistoryRead):
+    username: str
+    user_email: str
+    question: str
+    answer: str
+    deck_id: int
+    deck_title: str
+
+
+class LearningSummary(SQLModel):
+    total_cards: int
+    studied_cards: int
+    unused_cards: int
+    history_records: int
+    correct_records: int
+    accuracy: float

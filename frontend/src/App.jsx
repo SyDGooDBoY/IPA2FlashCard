@@ -1,81 +1,146 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "./api";
 import "./styles.css";
 
+const emptyAuthForm = { username: "", email: "", password: "" };
+const emptyDeckForm = { title: "", description: "" };
+const emptyDeckEditForm = { title: "", description: "" };
+const emptyCardForm = { question: "", answer: "" };
+const emptyPasswordForm = { current_password: "", new_password: "" };
+
+function formatDate(value) {
+  if (!value) return "-";
+  return new Intl.DateTimeFormat("en-AU", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
+}
+
 function App() {
   const [token, setToken] = useState(localStorage.getItem("token"));
+  const [theme, setTheme] = useState(
+    () => localStorage.getItem("theme") || "light"
+  );
   const [user, setUser] = useState(null);
-
   const [authMode, setAuthMode] = useState("login");
   const [authRole, setAuthRole] = useState("user");
-  const [authForm, setAuthForm] = useState({
-    username: "",
-    email: "",
-    password: "",
-  });
+  const [authForm, setAuthForm] = useState(emptyAuthForm);
 
   const [decks, setDecks] = useState([]);
   const [flashcards, setFlashcards] = useState([]);
   const [history, setHistory] = useState([]);
+  const [historyDetails, setHistoryDetails] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [users, setUsers] = useState([]);
-  const [allHistory, setAllHistory] = useState([]);
+  const [allHistoryDetails, setAllHistoryDetails] = useState([]);
 
   const [selectedDeckId, setSelectedDeckId] = useState("all");
   const [search, setSearch] = useState("");
   const [showUsed, setShowUsed] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
+  const [activeView, setActiveView] = useState("study");
+  const [deckEditorMode, setDeckEditorMode] = useState("create");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [revealedCardId, setRevealedCardId] = useState(null);
 
-  const [deckForm, setDeckForm] = useState({
-    title: "",
-    description: "",
-  });
-
-  const [cardForm, setCardForm] = useState({
-    question: "",
-    answer: "",
-  });
-
+  const [deckForm, setDeckForm] = useState(emptyDeckForm);
+  const [deckEditForm, setDeckEditForm] = useState(emptyDeckEditForm);
+  const [cardForm, setCardForm] = useState(emptyCardForm);
+  const [profileForm, setProfileForm] = useState({ email: "" });
+  const [passwordForm, setPasswordForm] = useState(emptyPasswordForm);
   const [editingCardId, setEditingCardId] = useState(null);
   const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    if (token) {
-      loadData();
-    }
-  }, [token]);
+  const logout = useCallback(() => {
+    localStorage.removeItem("token");
+    setToken(null);
+    setUser(null);
+    setDecks([]);
+    setFlashcards([]);
+    setHistory([]);
+    setHistoryDetails([]);
+    setSummary(null);
+    setUsers([]);
+    setAllHistoryDetails([]);
+    setActiveView("study");
+    setAuthMode("login");
+    setAuthRole("user");
+    setAuthForm(emptyAuthForm);
+    setMessage("");
+  }, []);
 
-  useEffect(() => {
-    setCurrentIndex(0);
-    setRevealedCardId(null);
-  }, [selectedDeckId, search, showUsed]);
+  const loadCards = useCallback(async () => {
+    if (!token) return;
 
-  async function loadData() {
+    const cardData = await api.getFlashcards({
+      deckId: selectedDeckId,
+      search,
+    });
+
+    setFlashcards(cardData);
+  }, [search, selectedDeckId, token]);
+
+  const loadData = useCallback(async (filters = {}) => {
+    if (!token) return;
+
     try {
-      const me = await api.me();
-      const deckData = await api.getDecks();
-      const cardData = await api.getFlashcards();
-      const historyData = await api.myHistory();
+      const [me, deckData, historyData, detailData, summaryData] =
+        await Promise.all([
+          api.me(),
+          api.getDecks(),
+          api.myHistory(),
+          api.myHistoryDetails(),
+          api.summary(),
+        ]);
 
       setUser(me);
+      setProfileForm({ email: me.email });
       setDecks(deckData);
-      setFlashcards(cardData);
       setHistory(historyData);
-
-      if (deckData.length > 0 && !selectedDeckId) {
-        setSelectedDeckId(String(deckData[0].id));
-      }
+      setHistoryDetails(detailData);
+      setSummary(summaryData);
 
       if (me.role === "admin") {
-        setUsers(await api.users());
-        setAllHistory(await api.allHistory());
+        const [userData, adminHistory] = await Promise.all([
+          api.users(),
+          api.allHistoryDetails(),
+        ]);
+        setUsers(userData);
+        setAllHistoryDetails(adminHistory);
       }
+
+      const nextDeckId = filters.deckId ?? selectedDeckId;
+      const nextSearch = filters.search ?? search;
+      const cardData = await api.getFlashcards({
+        deckId: nextDeckId,
+        search: nextSearch,
+      });
+      setFlashcards(cardData);
     } catch (error) {
       setMessage(error.message);
       logout();
     }
-  }
+  }, [logout, search, selectedDeckId, token]);
+
+  useEffect(() => {
+    window.queueMicrotask(() => {
+      loadData();
+    });
+  }, [loadData]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const timeoutId = window.setTimeout(() => {
+      loadCards().catch((error) => setMessage(error.message));
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loadCards, token]);
 
   async function handleAuthSubmit(event) {
     event.preventDefault();
@@ -86,6 +151,7 @@ function App() {
         await api.register(authForm);
         setAuthMode("login");
         setAuthRole("user");
+        setAuthForm({ ...emptyAuthForm, username: authForm.username });
         setMessage("Registration successful. Please login.");
         return;
       }
@@ -94,6 +160,7 @@ function App() {
         authRole === "admin"
           ? await api.adminLogin(authForm.username, authForm.password)
           : await api.login(authForm.username, authForm.password);
+
       localStorage.setItem("token", data.access_token);
       setToken(data.access_token);
       setMessage("");
@@ -102,15 +169,9 @@ function App() {
     }
   }
 
-  function logout() {
-    localStorage.removeItem("token");
-    setToken(null);
-    setUser(null);
-    setDecks([]);
-    setFlashcards([]);
-    setHistory([]);
-    setUsers([]);
-    setAllHistory([]);
+  async function refreshAfterChange(successMessage) {
+    setMessage(successMessage);
+    await loadData();
   }
 
   async function createDeck(event) {
@@ -127,30 +188,64 @@ function App() {
         description: deckForm.description.trim(),
       });
 
-      setDeckForm({ title: "", description: "" });
+      setDeckForm(emptyDeckForm);
       setSelectedDeckId(String(newDeck.id));
+      setDeckEditorMode("edit");
+      setDeckEditForm({
+        title: newDeck.title,
+        description: newDeck.description || "",
+      });
       setMessage("Deck created.");
-      await loadData();
+      await loadData({ deckId: String(newDeck.id) });
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function saveDeck(event) {
+    event.preventDefault();
+
+    if (selectedDeckId === "all") {
+      setMessage("Select a specific deck before updating.");
+      return;
+    }
+
+    if (!deckEditForm.title.trim()) {
+      setMessage("Deck title is required.");
+      return;
+    }
+
+    try {
+      const updatedDeck = await api.updateDeck(Number(selectedDeckId), {
+        title: deckEditForm.title.trim(),
+        description: deckEditForm.description.trim(),
+      });
+
+      setDeckEditForm({
+        title: updatedDeck.title,
+        description: updatedDeck.description || "",
+      });
+      await refreshAfterChange("Deck updated.");
     } catch (error) {
       setMessage(error.message);
     }
   }
 
   async function deleteDeck() {
-    if (!selectedDeckId) {
-      setMessage("Please select a deck first.");
+    if (selectedDeckId === "all") {
+      setMessage("Select a specific deck before deleting.");
       return;
     }
 
-    if (!confirm("Delete this deck?")) {
-      return;
-    }
+    if (!window.confirm("Delete this deck and its flashcards?")) return;
 
     try {
       await api.deleteDeck(Number(selectedDeckId));
-      setSelectedDeckId("");
+      setSelectedDeckId("all");
+      setDeckEditorMode("create");
+      setDeckEditForm(emptyDeckEditForm);
       setMessage("Deck deleted.");
-      await loadData();
+      await loadData({ deckId: "all" });
     } catch (error) {
       setMessage(error.message);
     }
@@ -159,8 +254,8 @@ function App() {
   async function saveFlashcard(event) {
     event.preventDefault();
 
-    if (!selectedDeckId) {
-      setMessage("Please create or select a deck first.");
+    if (selectedDeckId === "all") {
+      setMessage("Choose a deck before adding or updating a flashcard.");
       return;
     }
 
@@ -178,53 +273,77 @@ function App() {
     try {
       if (editingCardId) {
         await api.updateFlashcard(editingCardId, payload);
-        setMessage("Flashcard updated.");
+        await refreshAfterChange("Flashcard updated.");
       } else {
         await api.createFlashcard(payload);
-        setMessage("Flashcard added.");
+        await refreshAfterChange("Flashcard added.");
       }
 
-      setCardForm({ question: "", answer: "" });
+      setCardForm(emptyCardForm);
       setEditingCardId(null);
-      await loadData();
     } catch (error) {
       setMessage(error.message);
     }
   }
 
   function editFlashcard(card) {
-    setSelectedDeckId(String(card.deck_id));
-    setCardForm({
-      question: card.question,
-      answer: card.answer,
-    });
+    selectDeckId(String(card.deck_id));
+    setCardForm({ question: card.question, answer: card.answer });
     setEditingCardId(card.id);
     setMessage("Editing selected flashcard.");
   }
 
   async function deleteFlashcard(id) {
-    if (!confirm("Delete this flashcard?")) {
-      return;
-    }
+    if (!window.confirm("Delete this flashcard?")) return;
 
     try {
       await api.deleteFlashcard(id);
-      setMessage("Flashcard deleted.");
-      await loadData();
+      await refreshAfterChange("Flashcard deleted.");
     } catch (error) {
       setMessage(error.message);
     }
   }
 
-  async function markUsed(cardId) {
+  async function markUsed(cardId, isCorrect = true) {
     try {
-      await api.addHistory({
-        flashcard_id: cardId,
-        is_correct: true,
-      });
+      await api.addHistory({ flashcard_id: cardId, is_correct: isCorrect });
+      await refreshAfterChange(isCorrect ? "Marked as learned." : "Marked for review.");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
 
-      setMessage("Card moved to used cards.");
-      await loadData();
+  async function saveProfile(event) {
+    event.preventDefault();
+
+    try {
+      const updated = await api.updateMe({ email: profileForm.email });
+      setUser(updated);
+      setProfileForm({ email: updated.email });
+      setMessage("Profile updated.");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function changePassword(event) {
+    event.preventDefault();
+
+    try {
+      await api.updatePassword(passwordForm);
+      setPasswordForm(emptyPasswordForm);
+      setMessage("Password updated.");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function removeHistory(id) {
+    if (!window.confirm("Delete this history record?")) return;
+
+    try {
+      await api.deleteHistory(id);
+      await refreshAfterChange("History record deleted.");
     } catch (error) {
       setMessage(error.message);
     }
@@ -235,32 +354,31 @@ function App() {
   }, [history]);
 
   const visibleCards = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-
     return flashcards.filter((card) => {
-      const matchesDeck =
-        selectedDeckId === "all" || card.deck_id === Number(selectedDeckId);
-
-      const matchesSearch =
-        card.question.toLowerCase().includes(keyword) ||
-        card.answer.toLowerCase().includes(keyword);
-
       const isUsed = usedCardIds.has(card.id);
-
-      return matchesDeck && matchesSearch && (showUsed ? isUsed : !isUsed);
+      return showUsed ? isUsed : !isUsed;
     });
-  }, [flashcards, selectedDeckId, search, showUsed, usedCardIds]);
+  }, [flashcards, showUsed, usedCardIds]);
+
+  const selectedDeck = useMemo(() => {
+    if (selectedDeckId === "all") return null;
+    return decks.find((deck) => deck.id === Number(selectedDeckId)) || null;
+  }, [decks, selectedDeckId]);
+
+  const progressPercent = summary?.total_cards
+    ? Math.round((summary.studied_cards / summary.total_cards) * 100)
+    : 0;
+
+  const reviewCount = historyDetails.filter((item) => !item.is_correct).length;
 
   const displayCards = useMemo(() => {
     if (visibleCards.length <= 3) return visibleCards;
 
-    const result = [];
-    for (let offset = -1; offset <= 1; offset++) {
+    return [-1, 0, 1].map((offset) => {
       const index = (currentIndex + offset + visibleCards.length) % visibleCards.length;
-      result.push(visibleCards[index]);
-    }
-    return result;
-  }, [visibleCards, currentIndex]);
+      return visibleCards[index];
+    });
+  }, [currentIndex, visibleCards]);
 
   function previousCard() {
     if (visibleCards.length === 0) return;
@@ -278,13 +396,39 @@ function App() {
     return decks.find((deck) => deck.id === deckId)?.title || "Unknown Deck";
   }
 
+  function selectDeckId(deckId) {
+    setSelectedDeckId(deckId);
+    setCurrentIndex(0);
+    setRevealedCardId(null);
+
+    if (deckId === "all") {
+      setDeckEditorMode("create");
+      setDeckEditForm(emptyDeckEditForm);
+      return;
+    }
+
+    setDeckEditorMode("edit");
+    const deck = decks.find((item) => item.id === Number(deckId));
+    setDeckEditForm({
+      title: deck?.title || "",
+      description: deck?.description || "",
+    });
+  }
+
+  function startNewDeck() {
+    setDeckEditorMode("create");
+    setSelectedDeckId("all");
+    setDeckForm(emptyDeckForm);
+    setDeckEditForm(emptyDeckEditForm);
+    setCurrentIndex(0);
+    setRevealedCardId(null);
+  }
+
   if (!token) {
     return (
       <main className="auth-page">
         <section className="auth-card">
-          <h1>
-            <span>Flashcard</span> <span>Learning</span> <span>App</span>
-          </h1>
+          <h1>Flashcard Learning App</h1>
 
           <form onSubmit={handleAuthSubmit}>
             <h2>
@@ -302,301 +446,526 @@ function App() {
                   className={authRole === "user" ? "active" : ""}
                   onClick={() => setAuthRole("user")}
                 >
-                  User Login
+                  User
                 </button>
-
                 <button
                   type="button"
                   className={authRole === "admin" ? "active" : ""}
                   onClick={() => setAuthRole("admin")}
                 >
-                  Admin Login
+                  Admin
                 </button>
               </div>
             )}
 
-            <input
-              placeholder="Username"
-              value={authForm.username}
-              onChange={(event) =>
-                setAuthForm({ ...authForm, username: event.target.value })
-              }
-              required
-            />
-
-            {authMode === "register" && (
+            <label>
+              Username
               <input
-                type="email"
-                placeholder="Email"
-                value={authForm.email}
+                value={authForm.username}
                 onChange={(event) =>
-                  setAuthForm({ ...authForm, email: event.target.value })
+                  setAuthForm({ ...authForm, username: event.target.value })
                 }
                 required
               />
+            </label>
+
+            {authMode === "register" && (
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={authForm.email}
+                  onChange={(event) =>
+                    setAuthForm({ ...authForm, email: event.target.value })
+                  }
+                  required
+                />
+              </label>
             )}
 
-            <input
-              type="password"
-              placeholder="Password"
-              value={authForm.password}
-              onChange={(event) =>
-                setAuthForm({ ...authForm, password: event.target.value })
-              }
-              required
-            />
+            <label>
+              Password
+              <input
+                type="password"
+                value={authForm.password}
+                onChange={(event) =>
+                  setAuthForm({ ...authForm, password: event.target.value })
+                }
+                required
+              />
+            </label>
 
             <button type="submit">
               {authMode === "login" ? "Login" : "Create Account"}
             </button>
-
             <button
               type="button"
-              className="ghost-button"
+              className="secondary-button"
               onClick={() => {
                 const nextMode = authMode === "login" ? "register" : "login";
                 setAuthMode(nextMode);
-                if (nextMode === "register") {
-                  setAuthRole("user");
-                }
+                setAuthRole("user");
+                setMessage("");
               }}
             >
-              {authMode === "login"
-                ? "Need a user account? Register"
-                : "Already have an account? Login"}
+              {authMode === "login" ? "Register a user account" : "Back to login"}
             </button>
           </form>
 
           {message && <p className="message">{message}</p>}
         </section>
+
+        <button
+          type="button"
+          className="theme-toggle"
+          onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+          aria-label="Toggle dark mode"
+        >
+          {theme === "light" ? "Dark" : "Light"}
+        </button>
       </main>
     );
   }
 
   return (
     <main className="app-shell">
-      <header className="top-bar">
+      <aside className="sidebar">
         <div>
-          <h1>
-            <span>Flashcard</span> <span>Learning</span> <span>App</span>
-          </h1>
-          <p>
-            {user?.username} · {user?.role}
-          </p>
+          <h1>Flashcards</h1>
+          <p>{user?.username} - {user?.role}</p>
         </div>
 
-        <div className="top-actions">
+        {summary && (
+          <div className="learning-progress">
+            <div className="progress-copy">
+              <span>Course progress</span>
+              <strong>{progressPercent}%</strong>
+            </div>
+            <div className="progress-track">
+              <div style={{ width: `${progressPercent}%` }} />
+            </div>
+            <p>{summary.studied_cards} of {summary.total_cards} cards studied</p>
+          </div>
+        )}
+
+        <nav>
+          <button
+            className={activeView === "study" ? "active" : ""}
+            onClick={() => setActiveView("study")}
+          >
+            Study
+          </button>
+          <button
+            className={activeView === "history" ? "active" : ""}
+            onClick={() => setActiveView("history")}
+          >
+            History
+          </button>
+          <button
+            className={activeView === "profile" ? "active" : ""}
+            onClick={() => setActiveView("profile")}
+          >
+            Profile
+          </button>
           {user?.role === "admin" && (
-            <button onClick={() => setShowAdmin(!showAdmin)}>
-              {showAdmin ? "Hide Admin" : "Admin Panel"}
+            <button
+              className={activeView === "admin" ? "active" : ""}
+              onClick={() => setActiveView("admin")}
+            >
+              Admin
             </button>
           )}
-          <button onClick={() => setShowUsed(!showUsed)}>
-            {showUsed ? "Show Study Cards" : `Show Used Cards (${usedCardIds.size})`}
-          </button>
-          <button className="dark-button" onClick={logout}>
-            Logout
-          </button>
-        </div>
-      </header>
+        </nav>
 
-      <section className="workspace-panel">
-        <section className="panel-box create-deck-panel">
-          <h2>Create New Deck</h2>
-          <p className="panel-text">Create a category before adding flashcards.</p>
+        <button className="secondary-button" onClick={logout}>Logout</button>
+      </aside>
 
-          <form className="deck-form" onSubmit={createDeck}>
-            <input
-              placeholder="New deck title"
-              value={deckForm.title}
-              onChange={(event) =>
-                setDeckForm({ ...deckForm, title: event.target.value })
-              }
-            />
-
-            <input
-              placeholder="Deck description"
-              value={deckForm.description}
-              onChange={(event) =>
-                setDeckForm({ ...deckForm, description: event.target.value })
-              }
-            />
-
-            <button type="submit">Create Deck</button>
-          </form>
-        </section>
-
-        <section className="panel-box manage-deck-panel">
-          <h2>Manage Decks</h2>
-          <p className="panel-text">Choose the deck you want to study or manage.</p>
-
-          <div className="manage-deck-form">
-            <select
-              value={selectedDeckId}
-              onChange={(event) => setSelectedDeckId(event.target.value)}
-            >
-              <option value="all">All Decks</option>
-              {decks.map((deck) => (
-                <option key={deck.id} value={deck.id}>
-                  {deck.title}
-                </option>
-              ))}
-            </select>
-
-            <button type="button" className="danger-button" onClick={deleteDeck}>
-              Delete Selected Deck
-            </button>
+      <section className="content">
+        <header className="content-header">
+          <div>
+            <h2>
+              {activeView === "study" && "Study Workspace"}
+              {activeView === "history" && "Learning History"}
+              {activeView === "profile" && "User Profile"}
+              {activeView === "admin" && "Admin Panel"}
+            </h2>
+            <p>Manage decks, search cards, and track learning progress.</p>
           </div>
-        </section>
 
-        <section className="panel-box search-panel">
-          <h2>Search Flashcards</h2>
-          <p className="panel-text">Search by question or answer in real time.</p>
-
-          <div className="search-form">
-            <input
-              placeholder="Live search question or answer"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-
-            <button
-              type="button"
-              className="dark-button"
-              onClick={() => setSearch("")}
-            >
-              Clear Search
-            </button>
-          </div>
-        </section>
-      </section>
-
-      {message && <p className="message">{message}</p>}
-
-      {showAdmin && user?.role === "admin" ? (
-        <section className="admin-panel">
-          <h2>Admin Panel</h2>
-
-          <div className="admin-grid">
-            <div>
-              <h3>Users</h3>
-              {users.map((item) => (
-                <div className="admin-row" key={item.id}>
-                  <span>{item.username}</span>
-                  <span>{item.role}</span>
-                </div>
-              ))}
+          {summary && (
+            <div className="summary-row">
+              <span>{summary.total_cards} cards</span>
+              <span>{summary.studied_cards} studied</span>
+              <span>{reviewCount} to review</span>
+              <span>{summary.accuracy}% accuracy</span>
             </div>
+          )}
+        </header>
 
-            <div>
-              <h3>All Learning History</h3>
-              {allHistory.map((item) => (
-                <div className="admin-row" key={item.id}>
-                  <span>User #{item.user_id}</span>
-                  <span>Card #{item.flashcard_id}</span>
-                  <span>{item.is_correct ? "Used" : "Wrong"}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : (
-        <section className="study-area">
-          <div className="section-title-row">
-            <h2>{showUsed ? "Used Cards" : "Study Cards"}</h2>
-            <span>{visibleCards.length} card(s)</span>
-          </div>
+        {message && <p className="message">{message}</p>}
 
-          {visibleCards.length === 0 ? (
-            <p className="empty-message">
-              {showUsed ? "No used cards yet." : "No active flashcards available."}
-            </p>
-          ) : (
-            <div className="carousel">
-              <button className="arrow-button" onClick={previousCard}>
-                ‹
-              </button>
-
-              <div className="card-track">
-                {displayCards.map((card, index) => {
-                  const isActive =
-                    visibleCards.length <= 3
-                      ? index === Math.min(currentIndex, visibleCards.length - 1)
-                      : index === 1;
-
-                  return (
-                    <article
-                      key={card.id}
-                      className={`flashcard ${isActive ? "active" : ""}`}
-                      onClick={() =>
-                        setRevealedCardId(
-                          revealedCardId === card.id ? null : card.id
-                        )
-                      }
+        {activeView === "study" && (
+          <>
+            <section className="learning-board">
+              <div className="practice-column">
+                <section className="study-area">
+                  <div className="section-title-row">
+                    <div>
+                      <h3>{showUsed ? "Used Cards" : "Study Cards"}</h3>
+                      <p>
+                        {selectedDeck ? selectedDeck.title : "All decks"} - {visibleCards.length} card(s)
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        setShowUsed(!showUsed);
+                        setCurrentIndex(0);
+                        setRevealedCardId(null);
+                      }}
                     >
-                      <p className="deck-label">{getDeckTitle(card.deck_id)}</p>
-                      <h3>{card.question}</h3>
+                      {showUsed ? "Study cards" : `Used cards (${usedCardIds.size})`}
+                    </button>
+                  </div>
 
-                      {revealedCardId === card.id ? (
-                        <p className="answer">{card.answer}</p>
-                      ) : (
-                        <p className="hint">Click card to reveal answer</p>
-                      )}
+                  {visibleCards.length === 0 ? (
+                    <p className="empty-message">
+                      {showUsed ? "No used cards match this filter." : "No active cards match this filter."}
+                    </p>
+                  ) : (
+                    <div className="carousel">
+                      <button className="arrow-button" onClick={previousCard} aria-label="Previous card">
+                        &lt;
+                      </button>
 
-                      <div className="card-actions" onClick={(event) => event.stopPropagation()}>
-                        <button onClick={() => editFlashcard(card)}>Edit</button>
-                        <button onClick={() => deleteFlashcard(card.id)}>Delete</button>
-                        {!usedCardIds.has(card.id) && (
-                          <button onClick={() => markUsed(card.id)}>Used</button>
-                        )}
+                      <div className="card-track">
+                        {displayCards.map((card, index) => {
+                          const isActive =
+                            visibleCards.length <= 3
+                              ? index === Math.min(currentIndex, visibleCards.length - 1)
+                              : index === 1;
+
+                          return (
+                            <article
+                              key={card.id}
+                              className={`flashcard ${isActive ? "active" : ""}`}
+                              onClick={() =>
+                                setRevealedCardId(revealedCardId === card.id ? null : card.id)
+                              }
+                            >
+                              <p className="deck-label">{getDeckTitle(card.deck_id)}</p>
+                              <h4>{card.question}</h4>
+                              {revealedCardId === card.id ? (
+                                <p className="answer">{card.answer}</p>
+                              ) : (
+                                <p className="hint">Click to reveal answer</p>
+                              )}
+
+                              <div className="card-actions" onClick={(event) => event.stopPropagation()}>
+                                <button onClick={() => editFlashcard(card)}>Edit</button>
+                                <button onClick={() => deleteFlashcard(card.id)}>Delete</button>
+                                {!usedCardIds.has(card.id) && (
+                                  <>
+                                    <button onClick={() => markUsed(card.id, true)}>Correct</button>
+                                    <button onClick={() => markUsed(card.id, false)}>Review</button>
+                                  </>
+                                )}
+                              </div>
+                            </article>
+                          );
+                        })}
                       </div>
-                    </article>
-                  );
-                })}
+
+                      <button className="arrow-button" onClick={nextCard} aria-label="Next card">
+                        &gt;
+                      </button>
+                    </div>
+                  )}
+                </section>
               </div>
 
-              <button className="arrow-button" onClick={nextCard}>
-                ›
-              </button>
-            </div>
-          )}
-        </section>
-      )}
+              <aside className="study-sidebar">
+                <section className="session-card">
+                  <h3>Study Controls</h3>
+                  <p>{selectedDeck ? selectedDeck.description || selectedDeck.title : "Review all available decks."}</p>
+                  <label>
+                    Search cards
+                    <input
+                      value={search}
+                      onChange={(event) => {
+                        setSearch(event.target.value);
+                        setCurrentIndex(0);
+                        setRevealedCardId(null);
+                      }}
+                      placeholder="Question or answer"
+                    />
+                  </label>
+                  <label>
+                    Active deck
+                    <select
+                      value={selectedDeckId}
+                      onChange={(event) => selectDeckId(event.target.value)}
+                    >
+                      <option value="all">All Decks</option>
+                      {decks.map((deck) => (
+                        <option key={deck.id} value={deck.id}>
+                          {deck.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </section>
 
-      <form className="bottom-form" onSubmit={saveFlashcard}>
-        <input
-          placeholder="Enter question"
-          value={cardForm.question}
-          onChange={(event) =>
-            setCardForm({ ...cardForm, question: event.target.value })
-          }
-        />
+                <form className="flashcard-editor-card" onSubmit={saveFlashcard}>
+                  <h3>{editingCardId ? "Edit Flashcard" : "New Flashcard"}</h3>
+                  <label>
+                    Question
+                    <input
+                      value={cardForm.question}
+                      onChange={(event) =>
+                        setCardForm({ ...cardForm, question: event.target.value })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Answer
+                    <textarea
+                      value={cardForm.answer}
+                      onChange={(event) =>
+                        setCardForm({ ...cardForm, answer: event.target.value })
+                      }
+                    />
+                  </label>
+                  <button type="submit">
+                    {editingCardId ? "Update Flashcard" : "Add Flashcard"}
+                  </button>
+                  {editingCardId && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() => {
+                        setEditingCardId(null);
+                        setCardForm(emptyCardForm);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </form>
 
-        <textarea
-          placeholder="Enter answer"
-          value={cardForm.answer}
-          onChange={(event) =>
-            setCardForm({ ...cardForm, answer: event.target.value })
-          }
-        />
-
-        <button type="submit">
-          {editingCardId ? "Update Flashcard" : "Add Flashcard"}
-        </button>
-
-        {editingCardId && (
-          <button
-            type="button"
-            className="dark-button"
-            onClick={() => {
-              setEditingCardId(null);
-              setCardForm({ question: "", answer: "" });
-            }}
-          >
-            Cancel
-          </button>
+                <form
+                  className="deck-manager-card"
+                  onSubmit={deckEditorMode === "edit" ? saveDeck : createDeck}
+                >
+                  <div className="tool-header">
+                    <h3>{deckEditorMode === "edit" ? "Deck Settings" : "New Deck"}</h3>
+                    {deckEditorMode === "edit" && (
+                      <button type="button" className="secondary-button" onClick={startNewDeck}>
+                        New
+                      </button>
+                    )}
+                  </div>
+                  <label>
+                    Deck title
+                    <input
+                      value={deckEditorMode === "edit" ? deckEditForm.title : deckForm.title}
+                      onChange={(event) =>
+                        deckEditorMode === "edit"
+                          ? setDeckEditForm({
+                              ...deckEditForm,
+                              title: event.target.value,
+                            })
+                          : setDeckForm({
+                              ...deckForm,
+                              title: event.target.value,
+                            })
+                      }
+                    />
+                  </label>
+                  <label>
+                    Description
+                    <input
+                      value={
+                        deckEditorMode === "edit"
+                          ? deckEditForm.description
+                          : deckForm.description
+                      }
+                      onChange={(event) =>
+                        deckEditorMode === "edit"
+                          ? setDeckEditForm({
+                              ...deckEditForm,
+                              description: event.target.value,
+                            })
+                          : setDeckForm({
+                              ...deckForm,
+                              description: event.target.value,
+                            })
+                      }
+                    />
+                  </label>
+                  <button type="submit">
+                    {deckEditorMode === "edit" ? "Save Deck" : "Create Deck"}
+                  </button>
+                  {deckEditorMode === "edit" && (
+                    <button
+                      type="button"
+                      className="danger-button"
+                      onClick={deleteDeck}
+                    >
+                      Delete Deck
+                    </button>
+                  )}
+                </form>
+              </aside>
+            </section>
+          </>
         )}
-      </form>
+
+        {activeView === "history" && (
+          <section className="table-panel">
+            <table>
+              <thead>
+                <tr>
+                  <th>Deck</th>
+                  <th>Question</th>
+                  <th>Result</th>
+                  <th>Viewed</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {historyDetails.map((item) => (
+                  <tr key={item.id}>
+                    <td>{item.deck_title}</td>
+                    <td>{item.question}</td>
+                    <td>{item.is_correct ? "Correct" : "Review"}</td>
+                    <td>{formatDate(item.viewed_at)}</td>
+                    <td>
+                      <button onClick={() => removeHistory(item.id)}>Delete</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
+
+        {activeView === "profile" && (
+          <section className="profile-grid">
+            <form onSubmit={saveProfile}>
+              <h3>Account</h3>
+              <label>
+                Username
+                <input value={user?.username || ""} disabled />
+              </label>
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={profileForm.email}
+                  onChange={(event) => setProfileForm({ email: event.target.value })}
+                />
+              </label>
+              <button type="submit">Save Profile</button>
+            </form>
+
+            <form onSubmit={changePassword}>
+              <h3>Password</h3>
+              <label>
+                Current password
+                <input
+                  type="password"
+                  value={passwordForm.current_password}
+                  onChange={(event) =>
+                    setPasswordForm({
+                      ...passwordForm,
+                      current_password: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <label>
+                New password
+                <input
+                  type="password"
+                  value={passwordForm.new_password}
+                  onChange={(event) =>
+                    setPasswordForm({
+                      ...passwordForm,
+                      new_password: event.target.value,
+                    })
+                  }
+                />
+              </label>
+              <button type="submit">Change Password</button>
+            </form>
+          </section>
+        )}
+
+        {activeView === "admin" && user?.role === "admin" && (
+          <section className="admin-grid">
+            <div className="table-panel">
+              <h3>Users</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Created</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.username}</td>
+                      <td>{item.email}</td>
+                      <td>{item.role}</td>
+                      <td>{formatDate(item.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="table-panel">
+              <h3>All Learning History</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Deck</th>
+                    <th>Question</th>
+                    <th>Result</th>
+                    <th>Viewed</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {allHistoryDetails.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.username}</td>
+                      <td>{item.deck_title}</td>
+                      <td>{item.question}</td>
+                      <td>{item.is_correct ? "Correct" : "Review"}</td>
+                      <td>{formatDate(item.viewed_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+      </section>
+
+      <button
+        type="button"
+        className="theme-toggle"
+        onClick={() => setTheme(theme === "light" ? "dark" : "light")}
+        aria-label="Toggle dark mode"
+      >
+        {theme === "light" ? "Dark" : "Light"}
+      </button>
     </main>
   );
 }

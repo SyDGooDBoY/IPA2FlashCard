@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from app.database import get_session
-from app.models import Flashcard, Deck, User
+from app.models import Deck, Flashcard, User, ViewHistory
 from app.schemas import FlashcardCreate, FlashcardUpdate, FlashcardRead
 from app.auth import get_current_user
 
@@ -53,6 +53,12 @@ def create_flashcard(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
+    question = card_data.question.strip()
+    answer = card_data.answer.strip()
+
+    if not question or not answer:
+        raise HTTPException(status_code=400, detail="Question and answer are required")
+
     deck = session.get(Deck, card_data.deck_id)
 
     if not deck:
@@ -61,10 +67,10 @@ def create_flashcard(
     check_deck_access(deck, current_user)
 
     card = Flashcard(
-        question=card_data.question,
-        answer=card_data.answer,
+        question=question,
+        answer=answer,
         deck_id=card_data.deck_id,
-        owner_id=current_user.id
+        owner_id=deck.owner_id
     )
 
     session.add(card)
@@ -88,13 +94,24 @@ def update_flashcard(
 
     check_card_access(card, current_user)
 
-    update_data = card_data.dict(exclude_unset=True)
+    update_data = card_data.model_dump(exclude_unset=True)
+
+    if "question" in update_data:
+        update_data["question"] = update_data["question"].strip()
+        if not update_data["question"]:
+            raise HTTPException(status_code=400, detail="Question is required")
+
+    if "answer" in update_data:
+        update_data["answer"] = update_data["answer"].strip()
+        if not update_data["answer"]:
+            raise HTTPException(status_code=400, detail="Answer is required")
 
     if "deck_id" in update_data:
         deck = session.get(Deck, update_data["deck_id"])
         if not deck:
             raise HTTPException(status_code=404, detail="Deck not found")
         check_deck_access(deck, current_user)
+        update_data["owner_id"] = deck.owner_id
 
     for key, value in update_data.items():
         setattr(card, key, value)
@@ -118,6 +135,13 @@ def delete_flashcard(
         raise HTTPException(status_code=404, detail="Flashcard not found")
 
     check_card_access(card, current_user)
+
+    histories = session.exec(
+        select(ViewHistory).where(ViewHistory.flashcard_id == card_id)
+    ).all()
+
+    for history in histories:
+        session.delete(history)
 
     session.delete(card)
     session.commit()

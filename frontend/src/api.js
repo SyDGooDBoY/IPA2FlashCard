@@ -25,7 +25,7 @@ async function request(path, options = {}) {
     headers,
   });
 
-  let data = null;
+  let data;
 
   try {
     data = await response.json();
@@ -76,6 +76,16 @@ export const api = {
   },
 
   me: () => request("/auth/me"),
+  updateMe: (user) =>
+    request("/auth/me", {
+      method: "PUT",
+      body: user,
+    }),
+  updatePassword: (passwords) =>
+    request("/auth/me/password", {
+      method: "PUT",
+      body: passwords,
+    }),
   users: () => request("/auth/users"),
 
   getDecks: () => request("/decks/"),
@@ -97,7 +107,20 @@ export const api = {
       method: "DELETE",
     }),
 
-  getFlashcards: () => request("/flashcards/"),
+  getFlashcards: ({ deckId, search } = {}) => {
+    const params = new URLSearchParams();
+
+    if (deckId && deckId !== "all") {
+      params.set("deck_id", deckId);
+    }
+
+    if (search?.trim()) {
+      params.set("search", search.trim());
+    }
+
+    const query = params.toString();
+    return request(`/flashcards/${query ? `?${query}` : ""}`);
+  },
 
   createFlashcard: (card) =>
     request("/flashcards/", {
@@ -123,5 +146,12 @@ export const api = {
     }),
 
   myHistory: () => request("/history/me"),
+  myHistoryDetails: () => request("/history/me/details"),
+  summary: () => request("/history/summary"),
   allHistory: () => request("/history/all"),
+  allHistoryDetails: () => request("/history/all/details"),
+  deleteHistory: (id) =>
+    request(`/history/${id}`, {
+      method: "DELETE",
+    }),
 };

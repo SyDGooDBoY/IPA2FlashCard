@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 
 from app.database import get_session
-from app.models import Deck, User
+from app.models import Deck, Flashcard, User, ViewHistory
 from app.schemas import DeckCreate, DeckUpdate, DeckRead
 from app.auth import get_current_user
 
@@ -33,9 +33,15 @@ def create_deck(
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user)
 ):
+    title = deck_data.title.strip()
+    description = deck_data.description.strip() if deck_data.description else None
+
+    if not title:
+        raise HTTPException(status_code=400, detail="Deck title is required")
+
     deck = Deck(
-        title=deck_data.title,
-        description=deck_data.description,
+        title=title,
+        description=description,
         owner_id=current_user.id
     )
 
@@ -60,7 +66,15 @@ def update_deck(
 
     check_deck_access(deck, current_user)
 
-    update_data = deck_data.dict(exclude_unset=True)
+    update_data = deck_data.model_dump(exclude_unset=True)
+
+    if "title" in update_data:
+        update_data["title"] = update_data["title"].strip()
+        if not update_data["title"]:
+            raise HTTPException(status_code=400, detail="Deck title is required")
+
+    if "description" in update_data and update_data["description"] is not None:
+        update_data["description"] = update_data["description"].strip()
 
     for key, value in update_data.items():
         setattr(deck, key, value)
@@ -84,6 +98,20 @@ def delete_deck(
         raise HTTPException(status_code=404, detail="Deck not found")
 
     check_deck_access(deck, current_user)
+
+    cards = session.exec(select(Flashcard).where(Flashcard.deck_id == deck_id)).all()
+    card_ids = [card.id for card in cards if card.id is not None]
+
+    if card_ids:
+        histories = session.exec(
+            select(ViewHistory).where(ViewHistory.flashcard_id.in_(card_ids))
+        ).all()
+
+        for history in histories:
+            session.delete(history)
+
+    for card in cards:
+        session.delete(card)
 
     session.delete(deck)
     session.commit()

@@ -1,3 +1,5 @@
+import os
+
 from sqlmodel import Session, select
 
 from app.auth import hash_password
@@ -5,8 +7,8 @@ from app.models import Deck, Flashcard, User
 
 
 DEFAULT_ADMIN_USERNAME = "admin"
-DEFAULT_ADMIN_PASSWORD = "admin"
 DEFAULT_ADMIN_EMAIL = "admin@example.com"
+DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin123")
 
 STARTER_CARDS = [
     {
@@ -39,7 +41,6 @@ def ensure_default_admin(session: Session):
 
     if admin:
         admin.email = admin.email or DEFAULT_ADMIN_EMAIL
-        admin.hashed_password = hash_password(DEFAULT_ADMIN_PASSWORD)
         admin.role = "admin"
     else:
         admin = User(
