@@ -60,23 +60,56 @@ IPA2FlashCard/
 
 ## Local Setup
 
-Download or clone the project, then open a terminal in the project root folder. The project root is the folder that contains this `README.md`, `backend/`, and `frontend/`.
+Follow these steps from top to bottom the first time you download the project.
 
-Example:
+### 1. Install Required Software
+
+Install these before running the project:
+
+- Python 3.12
+- Node.js 22.13 or newer, or Node.js 24 or newer
+- MySQL Server
+- MySQL Workbench, or another MySQL client
+
+Check that Python, Node, and npm are available.
+
+Windows PowerShell:
 
 ```powershell
-cd path\to\IPA2FlashCard
+py -3.12 --version
+node --version
+npm --version
 ```
 
-On macOS or Linux:
+macOS or Linux:
+
+```bash
+python3 --version
+node --version
+npm --version
+```
+
+If the frontend install reports an `Unsupported engine` error, upgrade Node.js first.
+
+### 2. Open The Project Folder
+
+Open a terminal in the project root. The project root is the folder that contains `README.md`, `backend/`, and `frontend/`.
+
+Windows PowerShell example:
+
+```powershell
+cd D:\path\to\IPA2FlashCard
+```
+
+macOS or Linux example:
 
 ```bash
 cd /path/to/IPA2FlashCard
 ```
 
-### Backend
+### 3. Create The MySQL Database
 
-Before starting the backend, create the MySQL database. In MySQL Workbench, open a SQL tab and run:
+Start MySQL Server. Then open MySQL Workbench, create a new SQL tab, and run:
 
 ```sql
 CREATE DATABASE IF NOT EXISTS flashcard_app
@@ -84,29 +117,55 @@ CHARACTER SET utf8mb4
 COLLATE utf8mb4_unicode_ci;
 ```
 
-Then create and configure the Python backend from the project root.
+The backend will create the required tables automatically when it starts.
+
+### 4. Install Backend Dependencies
+
+Run these commands from the project root.
 
 Windows PowerShell:
 
 ```powershell
-python -m venv backend\.venv
+py -3.12 -m venv backend\.venv
+.\backend\.venv\Scripts\python.exe -m pip install --upgrade pip
 .\backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-copy backend\.env.example backend\.env
-notepad backend\.env
-.\backend\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --app-dir backend --host 127.0.0.1 --port 8000
+.\backend\.venv\Scripts\python.exe -m pip check
 ```
 
 macOS or Linux:
 
 ```bash
 python3 -m venv backend/.venv
+./backend/.venv/bin/python -m pip install --upgrade pip
 ./backend/.venv/bin/python -m pip install -r backend/requirements.txt
-cp backend/.env.example backend/.env
-nano backend/.env
-./backend/.venv/bin/python -m uvicorn app.main:app --reload --app-dir backend --host 127.0.0.1 --port 8000
+./backend/.venv/bin/python -m pip check
 ```
 
-In `backend/.env`, update `DATABASE_URL` with your local MySQL username and password:
+`pip check` should print:
+
+```text
+No broken requirements found.
+```
+
+### 5. Configure Backend Environment
+
+Copy the example environment file.
+
+Windows PowerShell:
+
+```powershell
+copy backend\.env.example backend\.env
+notepad backend\.env
+```
+
+macOS or Linux:
+
+```bash
+cp backend/.env.example backend/.env
+nano backend/.env
+```
+
+In `backend/.env`, set `DATABASE_URL` to your local MySQL username and password:
 
 ```env
 DATABASE_URL=mysql+pymysql://username:password@localhost:3306/flashcard_app
@@ -115,41 +174,113 @@ DEFAULT_ADMIN_PASSWORD=admin123
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
 
-If your password contains special URL characters such as `@`, `#`, `:`, `/`, `?`, `&`, or `%`, URL-encode the password before putting it in `DATABASE_URL`.
+Example for a local MySQL user named `root` with password `mypassword`:
 
-FastAPI automatically creates the required tables when the backend starts.
+```env
+DATABASE_URL=mysql+pymysql://root:mypassword@localhost:3306/flashcard_app
+```
 
-### Frontend
+If your MySQL password contains special URL characters such as `@`, `#`, `:`, `/`, `?`, `&`, or `%`, URL-encode the password before putting it in `DATABASE_URL`.
 
-Open a second terminal. From the project root:
+### 6. Start The Backend
+
+Keep this terminal open while using the app.
 
 Windows PowerShell:
 
 ```powershell
-cd frontend
-npm install
-npm run dev -- --host 127.0.0.1 --port 5173
+.\backend\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --app-dir backend --host 127.0.0.1 --port 8000
 ```
 
 macOS or Linux:
 
 ```bash
-cd frontend
-npm install
+./backend/.venv/bin/python -m uvicorn app.main:app --reload --app-dir backend --host 127.0.0.1 --port 8000
+```
+
+The backend should run at:
+
+```text
+http://localhost:8000
+```
+
+### 7. Install Frontend Dependencies
+
+Open a second terminal and run:
+
+Windows PowerShell:
+
+```powershell
+cd D:\path\to\IPA2FlashCard\frontend
+npm ci
+```
+
+macOS or Linux:
+
+```bash
+cd /path/to/IPA2FlashCard/frontend
+npm ci
+```
+
+Use `npm ci` for the first install because it follows `package-lock.json` exactly. Use `npm install` only when you intentionally update frontend dependencies.
+
+### 8. Start The Frontend
+
+In the same frontend terminal, run:
+
+```bash
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Open the frontend at:
+Open the app in your browser:
 
 ```text
 http://localhost:5173
 ```
 
-The FastAPI backend runs at:
+### Quick Run Commands After Setup
 
-```text
-http://localhost:8000
+After dependencies are installed, use these two commands whenever you want to run the project again.
+
+Terminal 1, from the project root:
+
+```powershell
+.\backend\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --app-dir backend --host 127.0.0.1 --port 8000
 ```
+
+Terminal 2, from `frontend/`:
+
+```powershell
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+### Troubleshooting
+
+If backend dependency installation or startup fails, rebuild the Python virtual environment.
+
+Windows PowerShell:
+
+```powershell
+Remove-Item -Recurse -Force backend\.venv
+py -3.12 -m venv backend\.venv
+.\backend\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
+.\backend\.venv\Scripts\python.exe -m pip check
+```
+
+macOS or Linux:
+
+```bash
+rm -rf backend/.venv
+python3 -m venv backend/.venv
+./backend/.venv/bin/python -m pip install --upgrade pip
+./backend/.venv/bin/python -m pip install -r backend/requirements.txt
+./backend/.venv/bin/python -m pip check
+```
+
+If the backend reports a MySQL connection error, check that MySQL Server is running and that `DATABASE_URL` in `backend/.env` uses the correct username, password, host, port, and database name.
+
+If admin login does not work with `admin123`, the `admin` user probably already exists in your database with an older password. Recreate the database or update the admin password manually.
 
 ## Default Admin Account
 

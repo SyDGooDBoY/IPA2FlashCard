@@ -365,6 +365,31 @@ function App() {
     return decks.find((deck) => deck.id === Number(selectedDeckId)) || null;
   }, [decks, selectedDeckId]);
 
+  const deckOptions = useMemo(() => {
+    if (user?.role !== "admin") return decks;
+
+    const uniqueDecks = [];
+    const seenDeckKeys = new Set();
+
+    for (const deck of decks) {
+      const key = `${deck.title.trim().toLowerCase()}::${(deck.description || "").trim().toLowerCase()}`;
+
+      if (seenDeckKeys.has(key)) continue;
+
+      seenDeckKeys.add(key);
+      uniqueDecks.push(deck);
+    }
+
+    if (
+      selectedDeck &&
+      !uniqueDecks.some((deck) => deck.id === selectedDeck.id)
+    ) {
+      uniqueDecks.push(selectedDeck);
+    }
+
+    return uniqueDecks;
+  }, [decks, selectedDeck, user?.role]);
+
   const progressPercent = summary?.total_cards
     ? Math.round((summary.studied_cards / summary.total_cards) * 100)
     : 0;
@@ -714,7 +739,7 @@ function App() {
                       onChange={(event) => selectDeckId(event.target.value)}
                     >
                       <option value="all">All Decks</option>
-                      {decks.map((deck) => (
+                      {deckOptions.map((deck) => (
                         <option key={deck.id} value={deck.id}>
                           {deck.title}
                         </option>
