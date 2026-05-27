@@ -10,26 +10,84 @@ DEFAULT_ADMIN_USERNAME = "admin"
 DEFAULT_ADMIN_EMAIL = "admin@example.com"
 DEFAULT_ADMIN_PASSWORD = os.getenv("DEFAULT_ADMIN_PASSWORD", "admin123")
 
-STARTER_CARDS = [
+DEFAULT_DECKS = [
     {
-        "question": "What is React?",
-        "answer": "React is a JavaScript library for building interactive user interfaces.",
+        "title": "Starter Deck",
+        "description": "Built-in flashcards for new users.",
+        "cards": [
+            {
+                "question": "What is React?",
+                "answer": "React is a JavaScript library for building interactive user interfaces.",
+            },
+            {
+                "question": "What is useState?",
+                "answer": "useState is a React Hook used to manage local component state.",
+            },
+            {
+                "question": "What is FastAPI?",
+                "answer": "FastAPI is a Python framework for building APIs quickly.",
+            },
+            {
+                "question": "What is SQL?",
+                "answer": "SQL is a language used to manage and query relational databases.",
+            },
+            {
+                "question": "What is JWT?",
+                "answer": "JWT is a signed token used to authenticate users after login.",
+            },
+        ],
     },
     {
-        "question": "What is useState?",
-        "answer": "useState is a React Hook used to manage local component state.",
+        "title": "Math",
+        "description": "Quick arithmetic and math concept practice.",
+        "cards": [
+            {
+                "question": "What is 7 x 8?",
+                "answer": "56.",
+            },
+            {
+                "question": "What is the square root of 81?",
+                "answer": "9.",
+            },
+            {
+                "question": "What is 15% of 200?",
+                "answer": "30.",
+            },
+            {
+                "question": "What is the formula for the area of a triangle?",
+                "answer": "Area = 1/2 x base x height.",
+            },
+            {
+                "question": "What is a prime number?",
+                "answer": "A number greater than 1 that has exactly two factors: 1 and itself.",
+            },
+        ],
     },
     {
-        "question": "What is FastAPI?",
-        "answer": "FastAPI is a Python framework for building APIs quickly.",
-    },
-    {
-        "question": "What is SQL?",
-        "answer": "SQL is a language used to manage and query relational databases.",
-    },
-    {
-        "question": "What is JWT?",
-        "answer": "JWT is a signed token used to authenticate users after login.",
+        "title": "Food",
+        "description": "Food vocabulary and nutrition basics.",
+        "cards": [
+            {
+                "question": "Which food group is rice mainly part of?",
+                "answer": "Grains or carbohydrates.",
+            },
+            {
+                "question": "What vitamin is oranges famous for?",
+                "answer": "Vitamin C.",
+            },
+            {
+                "question": "What is tofu commonly made from?",
+                "answer": "Soybeans.",
+            },
+            {
+                "question": "What does vegetarian mean?",
+                "answer": "A diet that does not include meat.",
+            },
+            {
+                "question": "Which nutrient is commonly associated with eggs, fish, and beans?",
+                "answer": "Protein.",
+            },
+        ],
     },
 ]
 
@@ -55,33 +113,34 @@ def ensure_default_admin(session: Session):
 
 
 def create_starter_cards_for_user(session: Session, user: User):
-    existing_deck = session.exec(
-        select(Deck).where(
-            Deck.owner_id == user.id,
-            Deck.title == "Starter Deck"
-        )
-    ).first()
+    for deck_data in DEFAULT_DECKS:
+        existing_deck = session.exec(
+            select(Deck).where(
+                Deck.owner_id == user.id,
+                Deck.title == deck_data["title"]
+            )
+        ).first()
 
-    if existing_deck:
-        return
+        if existing_deck:
+            continue
 
-    starter_deck = Deck(
-        title="Starter Deck",
-        description="Built-in flashcards for new users.",
-        owner_id=user.id,
-    )
-
-    session.add(starter_deck)
-    session.commit()
-    session.refresh(starter_deck)
-
-    for card in STARTER_CARDS:
-        flashcard = Flashcard(
-            question=card["question"],
-            answer=card["answer"],
-            deck_id=starter_deck.id,
+        deck = Deck(
+            title=deck_data["title"],
+            description=deck_data["description"],
             owner_id=user.id,
         )
-        session.add(flashcard)
+
+        session.add(deck)
+        session.commit()
+        session.refresh(deck)
+
+        for card in deck_data["cards"]:
+            flashcard = Flashcard(
+                question=card["question"],
+                answer=card["answer"],
+                deck_id=deck.id,
+                owner_id=user.id,
+            )
+            session.add(flashcard)
 
     session.commit()

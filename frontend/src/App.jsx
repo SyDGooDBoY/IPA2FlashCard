@@ -307,7 +307,7 @@ function App() {
   async function markUsed(cardId, isCorrect = true) {
     try {
       await api.addHistory({ flashcard_id: cardId, is_correct: isCorrect });
-      await refreshAfterChange(isCorrect ? "Marked as learned." : "Marked for review.");
+      await refreshAfterChange(isCorrect ? "Marked as correct." : "Marked as missed.");
     } catch (error) {
       setMessage(error.message);
     }
@@ -663,14 +663,20 @@ function App() {
                               )}
 
                               <div className="card-actions" onClick={(event) => event.stopPropagation()}>
-                                <button onClick={() => editFlashcard(card)}>Edit</button>
-                                <button onClick={() => deleteFlashcard(card.id)}>Delete</button>
                                 {!usedCardIds.has(card.id) && (
-                                  <>
-                                    <button onClick={() => markUsed(card.id, true)}>Correct</button>
-                                    <button onClick={() => markUsed(card.id, false)}>Review</button>
-                                  </>
+                                  <div className="learning-actions">
+                                    <button className="got-it-button" onClick={() => markUsed(card.id, true)}>
+                                      ✓ Got it
+                                    </button>
+                                    <button className="missed-button" onClick={() => markUsed(card.id, false)}>
+                                      ✕ Missed
+                                    </button>
+                                  </div>
                                 )}
+                                <div className="management-actions">
+                                  <button onClick={() => editFlashcard(card)}>Edit</button>
+                                  <button onClick={() => deleteFlashcard(card.id)}>Delete</button>
+                                </div>
                               </div>
                             </article>
                           );
@@ -839,7 +845,7 @@ function App() {
                   <tr key={item.id}>
                     <td>{item.deck_title}</td>
                     <td>{item.question}</td>
-                    <td>{item.is_correct ? "Correct" : "Review"}</td>
+                    <td>{item.is_correct ? "✓ Got it" : "✕ Missed"}</td>
                     <td>{formatDate(item.viewed_at)}</td>
                     <td>
                       <button onClick={() => removeHistory(item.id)}>Delete</button>
@@ -947,7 +953,7 @@ function App() {
                       <td>{item.username}</td>
                       <td>{item.deck_title}</td>
                       <td>{item.question}</td>
-                      <td>{item.is_correct ? "Correct" : "Review"}</td>
+                      <td>{item.is_correct ? "✓ Got it" : "✕ Missed"}</td>
                       <td>{formatDate(item.viewed_at)}</td>
                     </tr>
                   ))}

@@ -18,6 +18,8 @@
   --primary-soft: #dbeafe;
   --danger: #dc2626;
   --danger-hover: #b91c1c;
+  --success: #16a34a;
+  --success-hover: #15803d;
   --answer: #0f766e;
   --accent: #f59e0b;
   --flashcard-bg: #fffdf7;
@@ -44,6 +46,8 @@
   --primary-soft: #1e3a8a;
   --danger: #ef4444;
   --danger-hover: #dc2626;
+  --success: #22c55e;
+  --success-hover: #16a34a;
   --answer: #5eead4;
   --accent: #fbbf24;
   --flashcard-bg: #1d2638;
@@ -477,12 +481,40 @@ select:focus {
 
 .card-actions {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.learning-actions,
+.management-actions {
+  display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.card-actions button {
+.learning-actions button,
+.management-actions button {
   padding: 8px 10px;
+}
+
+.learning-actions .got-it-button {
+  background: var(--success);
+  border-color: var(--success);
+  color: #ffffff;
+}
+
+.learning-actions .got-it-button:hover {
+  background: var(--success-hover);
+}
+
+.learning-actions .missed-button {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #ffffff;
+}
+
+.learning-actions .missed-button:hover {
+  background: var(--danger-hover);
 }
 
 .profile-grid,
