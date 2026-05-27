@@ -666,10 +666,10 @@ function App() {
                                 {!usedCardIds.has(card.id) && (
                                   <div className="learning-actions">
                                     <button className="got-it-button" onClick={() => markUsed(card.id, true)}>
-                                      ✓ Got it
+                                      {"\u2713 Got it"}
                                     </button>
                                     <button className="missed-button" onClick={() => markUsed(card.id, false)}>
-                                      ✕ Missed
+                                      {"\u2715 Missed"}
                                     </button>
                                   </div>
                                 )}
@@ -845,7 +845,7 @@ function App() {
                   <tr key={item.id}>
                     <td>{item.deck_title}</td>
                     <td>{item.question}</td>
-                    <td>{item.is_correct ? "✓ Got it" : "✕ Missed"}</td>
+                    <td>{item.is_correct ? "\u2713 Got it" : "\u2715 Missed"}</td>
                     <td>{formatDate(item.viewed_at)}</td>
                     <td>
                       <button onClick={() => removeHistory(item.id)}>Delete</button>
@@ -953,7 +953,7 @@ function App() {
                       <td>{item.username}</td>
                       <td>{item.deck_title}</td>
                       <td>{item.question}</td>
-                      <td>{item.is_correct ? "✓ Got it" : "✕ Missed"}</td>
+                      <td>{item.is_correct ? "\u2713 Got it" : "\u2715 Missed"}</td>
                       <td>{formatDate(item.viewed_at)}</td>
                     </tr>
                   ))}

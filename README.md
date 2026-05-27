@@ -24,7 +24,7 @@ Flashcard Learning App
 - Frontend: React, Vite, JavaScript, CSS
 - Backend: FastAPI, SQLModel, SQLAlchemy
 - Authentication: Passlib bcrypt password hashing, JWT
-- Database: SQLite for local development by default; MySQL is supported through `DATABASE_URL`
+- Database: MySQL, managed locally through MySQL Workbench or MySQL Server
 
 ## Folder Structure
 
@@ -76,7 +76,15 @@ cd /path/to/IPA2FlashCard
 
 ### Backend
 
-Create and activate a Python virtual environment from the project root.
+Before starting the backend, create the MySQL database. In MySQL Workbench, open a SQL tab and run:
+
+```sql
+CREATE DATABASE IF NOT EXISTS flashcard_app
+CHARACTER SET utf8mb4
+COLLATE utf8mb4_unicode_ci;
+```
+
+Then create and configure the Python backend from the project root.
 
 Windows PowerShell:
 
@@ -84,6 +92,7 @@ Windows PowerShell:
 python -m venv backend\.venv
 .\backend\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
 copy backend\.env.example backend\.env
+notepad backend\.env
 .\backend\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --app-dir backend --host 127.0.0.1 --port 8000
 ```
 
@@ -93,23 +102,22 @@ macOS or Linux:
 python3 -m venv backend/.venv
 ./backend/.venv/bin/python -m pip install -r backend/requirements.txt
 cp backend/.env.example backend/.env
+nano backend/.env
 ./backend/.venv/bin/python -m uvicorn app.main:app --reload --app-dir backend --host 127.0.0.1 --port 8000
 ```
 
-The local `.env` file can use SQLite:
+In `backend/.env`, update `DATABASE_URL` with your local MySQL username and password:
 
 ```env
-DATABASE_URL=sqlite:///./flashcard_app.db
+DATABASE_URL=mysql+pymysql://username:password@localhost:3306/flashcard_app
 SECRET_KEY=replace-this-with-a-long-random-string
 DEFAULT_ADMIN_PASSWORD=admin123
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
 
-To use MySQL instead, create the database with `database/schema.sql`, then set:
+If your password contains special URL characters such as `@`, `#`, `:`, `/`, `?`, `&`, or `%`, URL-encode the password before putting it in `DATABASE_URL`.
 
-```env
-DATABASE_URL=mysql+pymysql://username:password@localhost:3306/flashcard_app
-```
+FastAPI automatically creates the required tables when the backend starts.
 
 ### Frontend
 
@@ -180,19 +188,17 @@ The admin password is not reset after the admin user already exists.
 
 ## Workload Allocation
 
-Update this section with your actual group members before submission.
+This assignment was completed individually.
 
 ```text
-Member 1:
-- Backend API design and database models.
-- Authentication, JWT, and role-based access control.
-
-Member 2:
-- React single-page interface.
-- Flashcard study workflow, search, and profile screens.
-
-Member 3:
-- Testing, README, database setup, admin history, and final demo preparation.
+Individual contribution:
+- Designed and implemented the React single-page frontend.
+- Built the FastAPI backend, SQLModel models, and MySQL database connection.
+- Implemented registration, login, JWT authentication, password hashing, and role-based access control.
+- Implemented deck, flashcard, profile, and learning-history CRUD workflows.
+- Built the admin view for all users' learning history.
+- Added live search, default learning decks, light/dark mode, README documentation, and local setup instructions.
+- Tested frontend build/lint and backend startup/API behavior.
 ```
 
 ## Professional Practice Notes
